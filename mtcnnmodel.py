@@ -2,56 +2,168 @@
 mtcnn模型
 """
 from . import netlayer
+import tensorflow as tf
+from tensorflow.contrib import learn
+from tensorflow.contrib import slim
+layer_params = [[10, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+                [16, 3, 1, 'same', 'conv2', 'relu'],
+                [32, 3, 1, 'same', 'conv3', 'relu'],
+                [2, 1, 1, 'same', 'class_pred', 'softmax'],
+                [4, 1, 1, 'same', 'bbox_pred', 'none'],
+                [10, 1, 1, 'same', 'landmark_pred', 'none']
+                ]
 
-layer_params = [ [  10, 3, 1, 'valid', 'conv1', 'relu'], # pool
-                 [  16, 3, 1, 'same',  'conv2', 'relu'], 
-                 [  32, 3, 1, 'same',  'conv3', 'relu'], 
-                 [  2, 1, 1, 'same',  'conv4-1', 'softmax'], 
-                 [  4, 1, 1, 'same',  'conv4-2', 'relu'],
-                 [  10,1, 1, 'same',  'conv4-3', 'relu']
-               ]
+KEEP_RATE = 0.7
 
 
-def mtcnnconv(input,params,training):
-    output = conv_layer(input, params[0],params[1],params[2],params[3],params[4],params[5], training ) # 30,30
+#封装netlayer的卷积层　　调用时参数过多　　使用数组传参
+def mtcnnconv(input, params, training):
+    output = netlayer.conv_layer(input, params[0], params[1], params[2], params[3], params[4], params[5], training)  # 30,30
     return output
 
 
-def mtcnn_pnet(inputs, widths, mode):
+"""
+#　计算训练过程中的分类损失 使用正例和负例　labels = 1 labels =0 
+param class_pred: 网络输出的类别预测值　
+param labels: 标注值
+
+output:　难例损失值
+"""
+def class_ohem(class_pred,labels):
+    #class_pred [batch,class_num=2]
+    prednum = tf.size(class_pred) #所有预测值数量　batch*class_num
+    class_pred_reshape = tf.reshape(class_pred,[prednum,-1])  #reshape成１维的tensor
+
+
+    #交叉熵损失　　只使用标注值对应的预测值计算损失　标注值有四种　　非正例都当成负例处理
+    zeros = tf.zeros_like(labels)
+    labels_filter = tf.where(tf.less(labels,0),zeros,labels) #小于０的label赋值为０
+    label_int = tf.cast(labels_filter, tf.int32)             #类型转换
+
+
+    num_row = tf.to_int32(class_pred.get_shape()[0])   #sample数量
+    row = tf.range(num_row)*2    #每个sample两个预测值　　row为该sample预测值起始位置
+    indices_ = row + label_int   #根据标注值　获取正确预测值得位置
+    label_prob = tf.squeeze(tf.gather(class_pred_reshape, indices_))  #筛选用于计算loss的值
+
+
+    #计算loss
+    loss = -tf.log(label_prob + 1e-10)  #1e-10 防止label_prob = 0
+
+    #只使用正例和负例进行loss的最终计算
+    ones = tf.ones_like(labels)
+    valid_indexs = tf.where(tf.less(labels,0),zeros,ones)
+    pos_neg_loss = loss * valid_indexs
+
+    #难例在线挖掘
+    num_valids = tf.reduce_sum(valid_indexs)
+
+    keep_num = tf.cast(num_valids*KEEP_RATE,tf.int32)  #使用损失值位于前７０％loss进行计算
+
+    hard_loss, _ = tf.nn.top_k(pos_neg_loss, k=keep_num)  #难例损失
+    return tf.reduce_mean(hard_loss)
+
+
+
+
+"""
+#　计算训练过程中的目标框回归损失 使用正例和部分人脸样例例　labels = 1 labels = -1
+param bbox_pred: 网络输出的目标框预测值　
+param bbox_truth: 真实目标框坐标
+param labels: 类别标注值
+
+output:　难例损失值
+"""
+def bbox_ohem(bbox_pred,bbox_truth,labels):
+    zeros = tf.zeros_like(labels)
+    ones = tf.ones_like(labels)
+
+    valid_indexs = tf.where(tf.equal(tf.abs(labels),1),ones,zeros)  #使用pos 和　part计算目标框回归损失
+
+    bbox_square_loss = tf.square(bbox_pred,bbox_truth) #每个sample的box有四个值　二维
+    bbox_square_loss = tf.reduce_sum(bbox_square_loss,axis=1)  #将每个sample的目标框左上角坐标值　宽　高的loss累加起来　
+    bbox_square_loss = bbox_square_loss * valid_indexs      #使用pos 和　part计算目标框回归损失
+
+    num_valids = tf.reduce_sum(valid_indexs)
+    keep_num = tf.cast(num_valids * KEEP_RATE,tf.int32)
+
+    hard_loss, _ = tf.nn.top_k(bbox_square_loss, k=keep_num)  #难例损失
+    return tf.reduce_mean(hard_loss)
+
+
+
+
+"""
+#　计算训练过程中的目标框回归损失 使用正例和部分人脸样例例　labels = 1 labels = -1
+param bbox_pred: 网络输出的目标框预测值　
+param bbox_truth: 真实目标框坐标
+param labels: 类别标注值
+
+output:　难例损失值
+"""
+def landmark_ohem(landmark_pred,landmark_truth,labels):
+    #keep label =-2  then do landmark detection
+
+    ones = tf.ones_like(labels,dtype=tf.float32)
+    zeros = tf.zeros_like(labels,dtype=tf.float32)
+
+    valid_indexs = tf.where(tf.equal(labels,-2),ones,zeros)  #使用landmark  计算人脸关键点坐标损失
+
+    landmark_square_loss = tf.square(landmark_pred-landmark_truth)
+    landmark_square_loss = tf.reduce_sum(landmark_square_loss,axis=1)
+    landmark_square_loss = landmark_square_loss * valid_indexs  #使用landmark  计算人脸关键点坐标损失
+
+    num_valid = tf.reduce_sum(valid_indexs)
+    keep_num = tf.cast(num_valid*KEEP_RATE,dtype=tf.int32)
+
+    hard_loss, _ = tf.nn.top_k(landmark_square_loss, k=keep_num)  #难例损失
+    return tf.reduce_mean(hard_loss)
+
+
+"""
+＃mtcnn p-net网络
+param input: 输入层数据　[batch, in_height, in_width, in_channels]
+param labels: 类别标签　
+param bboxs:　真实目标框
+param landmarks:人脸关键点坐标标注
+param mode: learn.ModeKeys.TRAIN　　
+
+output:　卷积层输出　[batch, out_height, out_width, filternum]
+"""
+def mtcnn_pnet(inputs, labels,bboxs,landmarks, mode):
     """Build convolutional network layers attached to the given input tensor"""
 
     training = (mode == learn.ModeKeys.TRAIN)
 
-    with tf.variable_scope("mtcnn_pnet"): # h,w        
-        conv1 = mtcnnconv(inputs, layer_params[0], training ) 
-        pool1 = maxpool_layer(conv1,[2,2],2,'same','pool1')
-        conv2 = mtcnnconv( pool1, layer_params[1], training ) 
-        conv3 = conv_layer( conv2, layer_params[2], training ) 
-        class_pret = conv_layer( conv3, layer_params[3], training ) 
-        
-        conv4_2 = conv_layer( pool4, layer_params[4], training ) # 7,14
-        conv4_3 = conv_layer( conv5, layer_params[5], training ) # 7,14
-        pool6 = pool_layer( conv6, 1, 'valid', 'pool6')        # 3,13
-        conv7 = conv_layer( pool6, layer_params[6], training ) # 3,13
-        conv8 = conv_layer( conv7, layer_params[7], training ) # 3,13
-        pool8 = tf.layers.max_pooling2d( conv8, [3,1], [3,1], 
-                                   padding='valid', name='pool8') # 1,13
-        features = tf.squeeze(pool8, axis=1, name='features') # squeeze row dim
+    with tf.variable_scope("mtcnn_pnet"):
+        conv1 = mtcnnconv(inputs, layer_params[0], training)
+        pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
+        conv2 = mtcnnconv(pool1, layer_params[1], training)
+        conv3 = netlayer.conv_layer(conv2, layer_params[2], training)
+        class_pred = mtcnnconv(conv3, layer_params[3], training)
 
-        kernel_sizes = [ params[1] for params in layer_params]
+        bbox_pred = mtcnnconv(conv3, layer_params[4], training)  # 7,14
+        landmark_pred = mtcnnconv(conv3, layer_params[5], training)  # 7,14
+        net = slim.conv2d(landmark_pred, num_outputs=16, kernel_size=[3, 3], stride=1, scope='conv2')
+        if training:
+            #batch*2
+            cls_prob = tf.squeeze(class_pred, [1,2], name='cls_prob') #训练时输出w,h为１＊１
+            cls_loss = class_ohem(cls_prob, labels)
+            #batch
+            bbox_pred = tf.squeeze(bbox_pred, [1, 2], name='bbox_pred')
+            bbox_loss = bbox_ohem(bbox_pred, bboxs, labels)
+            #batch*10
+            landmark_pred = tf.squeeze(landmark_pred, [1, 2], name="landmark_pred")
+            landmark_loss = landmark_ohem(landmark_pred, landmarks, labels)
 
-        # Calculate resulting sequence length from original image widths
-        conv1_trim = tf.constant( 2 * (kernel_sizes[0] // 2),
-                                  dtype=tf.int32,
-                                  name='conv1_trim')
-        one = tf.constant(1, dtype=tf.int32, name='one')
-        two = tf.constant(2, dtype=tf.int32, name='two')
-        after_conv1 = tf.subtract( widths, conv1_trim)
-        after_pool2 = tf.floor_div( after_conv1, two )
-        after_pool4 = tf.subtract(after_pool2, one)
-        after_pool6 = tf.subtract(after_pool4, one) 
-        after_pool8 = after_pool6
+            l2_loss = tf.add_n( tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-        sequence_length = tf.reshape(after_pool8,[-1], name='seq_len') # Vectorize
+            l2_loss = tf.losses.get_regularization_loss()
 
-        return features,sequence_length
+            return cls_loss, bbox_loss, landmark_loss, l2_loss
+        else: # testing
+            #when test, batch_size = 1
+            cls_pro_test = tf.squeeze(conv4_1, axis=0)
+            bbox_pred_test = tf.squeeze(bbox_pred, axis=0)
+            landmark_pred_test = tf.squeeze(landmark_pred, axis=0)
+            return cls_pro_test, bbox_pred_test, landmark_pred_test
