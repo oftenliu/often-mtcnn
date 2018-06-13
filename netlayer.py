@@ -88,3 +88,33 @@ def maxpool_layer( input, poolsize,strides, pad, scope ):
                                    padding=pad, 
                                    name=scope)
     return output
+
+
+
+"""
+#展平层
+param input: 输入层数据
+param poolsize: 池化核数量　
+param scope:　层名
+
+output:　最大池化层输出
+"""
+def flatten_layer( input, scope ):
+
+    output = tf.layers.flatten(input,name=scope)
+    return output
+
+
+
+"""
+#全连接层
+param input: 输入层数据
+param poolsize: 池化核数量　
+param scope:　层名
+
+output:　最大池化层输出
+"""
+def fully_layer( input, scope ):
+
+    output = tf.layers.flatten(input,name=scope)
+    return output

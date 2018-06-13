@@ -5,13 +5,28 @@ from . import netlayer
 import tensorflow as tf
 from tensorflow.contrib import learn
 from tensorflow.contrib import slim
-layer_params = [[10, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+pnet_params = [[10, 3, 1, 'valid', 'conv1', 'relu'],  # pool
                 [16, 3, 1, 'same', 'conv2', 'relu'],
                 [32, 3, 1, 'same', 'conv3', 'relu'],
                 [2, 1, 1, 'same', 'class_pred', 'softmax'],
                 [4, 1, 1, 'same', 'bbox_pred', 'none'],
                 [10, 1, 1, 'same', 'landmark_pred', 'none']
                 ]
+
+
+
+
+
+
+onet_params = [[10, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+                [16, 3, 1, 'same', 'conv2', 'relu'],
+                [32, 3, 1, 'same', 'conv3', 'relu'],
+                [2, 1, 1, 'same', 'class_pred', 'softmax'],
+                [4, 1, 1, 'same', 'bbox_pred', 'none'],
+                [10, 1, 1, 'same', 'landmark_pred', 'none']
+                ]
+
+
 
 KEEP_RATE = 0.7
 
@@ -130,20 +145,20 @@ param mode: learn.ModeKeys.TRAIN　　
 
 output:　卷积层输出　[batch, out_height, out_width, filternum]
 """
-def mtcnn_pnet(inputs, labels,bboxs,landmarks, mode):
+def mtcnn_pnet(inputs, labels=None,bboxs=None,landmarks=None, mode=learn.ModeKeys.TRAIN):
     """Build convolutional network layers attached to the given input tensor"""
 
     training = (mode == learn.ModeKeys.TRAIN)
 
     with tf.variable_scope("mtcnn_pnet"):
-        conv1 = mtcnnconv(inputs, layer_params[0], training)
+        conv1 = mtcnnconv(inputs, pnet_params[0], training)
         pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
-        conv2 = mtcnnconv(pool1, layer_params[1], training)
-        conv3 = netlayer.conv_layer(conv2, layer_params[2], training)
-        class_pred = mtcnnconv(conv3, layer_params[3], training)
+        conv2 = mtcnnconv(pool1, pnet_params[1], training)
+        conv3 = netlayer.conv_layer(conv2, pnet_params[2], training)
+        class_pred = mtcnnconv(conv3, pnet_params[3], training)
 
-        bbox_pred = mtcnnconv(conv3, layer_params[4], training)  # 7,14
-        landmark_pred = mtcnnconv(conv3, layer_params[5], training)  # 7,14
+        bbox_pred = mtcnnconv(conv3, pnet_params[4], training)  # 7,14
+        landmark_pred = mtcnnconv(conv3, pnet_params[5], training)  # 7,14
         net = slim.conv2d(landmark_pred, num_outputs=16, kernel_size=[3, 3], stride=1, scope='conv2')
         if training:
             #batch*2
@@ -158,12 +173,83 @@ def mtcnn_pnet(inputs, labels,bboxs,landmarks, mode):
 
             l2_loss = tf.add_n( tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-            l2_loss = tf.losses.get_regularization_loss()
+            #l2_loss = tf.losses.get_regularization_loss()
 
             return cls_loss, bbox_loss, landmark_loss, l2_loss
         else: # testing
             #when test, batch_size = 1
-            cls_pro_test = tf.squeeze(conv4_1, axis=0)
+            cls_pro_test = tf.squeeze(class_pred, axis=0)
             bbox_pred_test = tf.squeeze(bbox_pred, axis=0)
             landmark_pred_test = tf.squeeze(landmark_pred, axis=0)
             return cls_pro_test, bbox_pred_test, landmark_pred_test
+
+
+rnet_params = [[28, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+                [48, 3, 1, 'same', 'conv2', 'relu'],
+                [64, 2, 1, 'same', 'conv3', 'relu']
+                ]
+def R_Net(inputs,label=None, bbox_target=None, landmark_target=None, training=True):
+    with slim.arg_scope([slim.conv2d],
+                        activation_fn = prelu,
+                        weights_initializer=slim.xavier_initializer(),
+                        biases_initializer=tf.zeros_initializer(),
+                        weights_regularizer=slim.l2_regularizer(0.0005),
+                        padding='valid'):
+        net = slim.conv2d(inputs, num_outputs=28, kernel_size=[3,3], stride=1, scope="conv1")
+        net = slim.max_pool2d(net, kernel_size=[2,2],stride=2,scope="pool1")
+        net = slim.conv2d(net,num_outputs=48,kernel_size=[3,3],stride=1,scope="conv2")
+        net = slim.max_pool2d(net,kernel_size=[3,3],stride=2,scope="pool2")
+        net = slim.conv2d(net,num_outputs=64,kernel_size=[2,2],stride=1,scope="conv3")
+        fc_flatten = slim.flatten(net)
+        fc1 = slim.fully_connected(fc_flatten, num_outputs=128,scope="fc1")
+        #batch*2
+        cls_prob = slim.fully_connected(fc1,num_outputs=2,scope="cls_fc",activation_fn=tf.nn.softmax)
+        #batch*4
+        bbox_pred = slim.fully_connected(fc1,num_outputs=4,scope="bbox_fc",activation_fn=None)
+        #batch*10
+        landmark_pred = slim.fully_connected(fc1,num_outputs=10,scope="landmark_fc",activation_fn=None)
+        #train
+        if training:
+            cls_loss = cls_ohem(cls_prob,label)
+            bbox_loss = bbox_ohem(bbox_pred,bbox_target,label)
+            accuracy = cal_accuracy(cls_prob,label)
+            landmark_loss = landmark_ohem(landmark_pred,landmark_target,label)
+            L2_loss = tf.add_n(slim.losses.get_regularization_losses())
+            return cls_loss,bbox_loss,landmark_loss,L2_loss,accuracy
+        else:
+            return cls_prob,bbox_pred,landmark_pred
+
+
+def mtcnn_rnet(inputs, labels=None,bboxs=None,landmarks=None, mode=learn.ModeKeys.TRAIN):
+
+    training = (mode == learn.ModeKeys.TRAIN)
+
+    with tf.variable_scope("mtcnn_pnet"):
+        conv1 = mtcnnconv(inputs, rnet_params[0], training)
+
+        pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
+
+        conv2 = mtcnnconv(pool1, rnet_params[1], training)
+
+        pool2 = netlayer.maxpool_layer(conv2, [3, 3], 2, 'same', 'pool2')
+
+        conv3 = netlayer.conv_layer(conv2, rnet_params[2], training)
+
+        fc_flatten = slim.flatten(conv3)
+        fc1 = slim.fully_connected(fc_flatten, num_outputs=128,scope="fc1")
+        #batch*2
+        cls_prob = slim.fully_connected(fc1,num_outputs=2,scope="cls_fc",activation_fn=tf.nn.softmax)
+        #batch*4
+        bbox_pred = slim.fully_connected(fc1,num_outputs=4,scope="bbox_fc",activation_fn=None)
+        #batch*10
+        landmark_pred = slim.fully_connected(fc1,num_outputs=10,scope="landmark_fc",activation_fn=None)
+        #train
+        if training:
+            cls_loss = cls_ohem(cls_prob,label)
+            bbox_loss = bbox_ohem(bbox_pred,bbox_target,label)
+            accuracy = cal_accuracy(cls_prob,label)
+            landmark_loss = landmark_ohem(landmark_pred,landmark_target,label)
+            L2_loss = tf.add_n(slim.losses.get_regularization_losses())
+            return cls_loss,bbox_loss,landmark_loss,L2_loss,accuracy
+        else:
+            return cls_prob,bbox_pred,landmark_pred
