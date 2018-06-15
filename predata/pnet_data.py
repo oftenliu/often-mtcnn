@@ -112,7 +112,7 @@ def gen_hard_bbox_pnet(srcDataSet, srcAnnotations):
                 if nx2 > width or ny2 > height:
                     continue
                 crop_box = np.array([nx1, ny1, nx2, ny2])
-                #yu gt de offset
+                #计算的偏移量　　保证卷积的尺度不变性　不同尺度得到预测输出相同　　计算的是比例
                 offset_x1 = (x1 - nx1) / float(size)
                 offset_y1 = (y1 - ny1) / float(size)
                 offset_x2 = (x2 - nx2) / float(size)
