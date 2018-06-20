@@ -11,7 +11,7 @@ output:　交并比
 
 def IOU(bbox,bboxs_truth):
 
-    bbox_area = (bbox[2] - bbox[0] + 1)*(bbox[3] - bbox[1]) #目标框面积
+    bbox_area = (bbox[2] - bbox[0] + 1)*(bbox[3] - bbox[1] + 1) #目标框面积
 
     boxs_truth_area = (bboxs_truth[:,2] - bboxs_truth[:,0] + 1) * (bboxs_truth[:,3] - bboxs_truth[:,1] +1)
 
@@ -24,8 +24,8 @@ def IOU(bbox,bboxs_truth):
 
     #求交集宽高
 
-    intersection_width = np.maxinum(0, bboxs_truth[:,2] - bboxs_truth[:,0] + 1)  #保证宽高大于零
-    intersection_height = np.maxinum(0, bboxs_truth[:, 3] - bboxs_truth[:, 1] + 1)
+    intersection_width = np.maximum(0, intersection_downx - intersection_topx + 1)  #保证宽高大于零
+    intersection_height = np.maximum(0, intersection_downy - intersection_topy + 1)
 
     intersection_area = intersection_width*intersection_height
 

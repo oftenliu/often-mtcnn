@@ -31,11 +31,13 @@ def gen_hard_bbox_pnet(srcDataSet, srcAnnotations):
         imPath = annotation[0]
         # boxed change to float type
         #box坐标转换为array数组  使用np处理数据
-        bbox = list(float, annotation[1:])
+        bbox = list(map(float, annotation[1:]))
         # gt. each row mean bounding box
         boxes = np.array(bbox, dtype=np.float32).reshape(-1, 4)
         #load image
-        img = cv2.imread(os.path.join(srcDataSet, imPath + '.jpg'))
+        file_abspath = os.path.join(srcDataSet, imPath +'.jpg')
+        print(file_abspath)
+        img = cv2.imread(file_abspath)
 
         idx += 1
         height, width, channel = img.shape  #注意宽高的位置
@@ -45,17 +47,17 @@ def gen_hard_bbox_pnet(srcDataSet, srcAnnotations):
         while negNum < 50:
             #负例图片大小
             neg_size = np.random.randint(12,min(width,height)/2)
-            neg_topx = np.random.randint(0,width - size) #保证剪切图片右边不超出原图边界
-            neg_topy = np.random.randint(0,height - size) #确保剪切图片上边界不超出原图上界
+            neg_topx = np.random.randint(0,width - neg_size) #保证剪切图片右边不超出原图边界
+            neg_topy = np.random.randint(0,height - neg_size) #确保剪切图片上边界不超出原图上界
 
-            crop_box = np.array([neg_topx,neg_topy,neg_topx + size,neg_topy + size])
+            crop_box = np.array([neg_topx,neg_topy,neg_topx + neg_size,neg_topy + neg_size])
             # random crop
             # cal iou and iou must below 0.3 for neg sample
             iou = IOU(crop_box, boxes)
             if np.max(iou) >= 0.3:
                 continue
             # crop sample image
-            crop_img = img[neg_topx:neg_topx+size,neg_topy+size,:]
+            crop_img = img[neg_topy:neg_topy+neg_size,neg_topx:neg_topx+neg_size,:]
             resize_img = cv2.resize(crop_img,(12,12))
 
             # now to save it
