@@ -9,8 +9,8 @@ import sys
 import argparse
 rootPath = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 sys.path.insert(0, rootPath)
-from tools.common_utils import getBboxLandmarkFromTxt, IoU, BBox
-from tools.landmark_utils import rotate,flip
+from util.common import getBboxLandmarkFromTxt, IOU, BBox
+from util.landmark_utils import rotate,flip
 
 def gen_landmark_data(srcTxt, net, augment=False):
     '''
@@ -60,8 +60,8 @@ def gen_landmark_data(srcTxt, net, augment=False):
                 bbox_size = np.random.randint(int(min(gt_w, gt_h) * 0.8), np.ceil(1.25 * max(gt_w, gt_h)))
                 delta_x = np.random.randint(-gt_w * 0.2, gt_w * 0.2)
                 delta_y = np.random.randint(-gt_h * 0.2, gt_h * 0.2)
-                nx1 = max(x1+gt_w/2-bbox_size/2+delta_x,0)
-                ny1 = max(y1+gt_h/2-bbox_size/2+delta_y,0)
+                nx1 = int(max(x1+gt_w/2-bbox_size/2+delta_x,0))
+                ny1 = int(max(y1+gt_h/2-bbox_size/2+delta_y,0))
                 
                 nx2 = nx1 + bbox_size
                 ny2 = ny1 + bbox_size
@@ -71,7 +71,7 @@ def gen_landmark_data(srcTxt, net, augment=False):
                 cropped_im = img[ny1:ny2+1,nx1:nx2+1,:]
                 resized_im = cv2.resize(cropped_im, (sizeOfNet[net], sizeOfNet[net]))
                 #cal iou
-                iou = IoU(crop_box, np.expand_dims(gt_box,0))
+                iou = IOU(crop_box, np.expand_dims(gt_box,0))
                 if iou <= 0.65:
                     continue
                 F_imgs.append(resized_im)
@@ -131,7 +131,7 @@ def gen_landmark_data(srcTxt, net, augment=False):
         sys.stdout.write(printStr)
         sys.stdout.flush()
     saveF.close()
-    print "\nLandmark create done!"
+    print("\nLandmark create done!")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Create hard bbox sample...',
@@ -143,7 +143,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    stage = args.stage
+    stage = 'pnet'
     if stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     # augment: data augmentation

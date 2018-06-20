@@ -31,3 +31,101 @@ def IOU(bbox,bboxs_truth):
 
     iou = intersection_area *1.0/(bbox_area + boxs_truth_area - intersection_area)
     return iou
+
+
+def getBboxLandmarkFromTxt(txt, with_landmark=True):
+    """
+        Generate data from txt file
+        return [(img_path, bbox, landmark)]
+            bbox: [left, right, top, bottom]
+            landmark: [(x1, y1), (x2, y2), ...]
+    """
+    dirname = os.path.dirname(txt)
+    for line in open(txt, 'r'):
+        line = line.strip()
+        components = line.split(' ')
+        img_path = os.path.join(dirname, components[0]) # file path
+        # bounding box, (x1, y1, x2, y2)
+        bbox = (components[1], components[3], components[2], components[4])
+        bbox = [float(_) for _ in bbox]
+        bbox = list(map(int, bbox))
+        # landmark
+        if not with_landmark:
+            yield (img_path, BBox(bbox))
+            continue
+        landmark = np.zeros((5, 2))
+        for index in range(0, 5):
+            rv = (float(components[5+2*index]), float(components[5+2*index+1]))
+            landmark[index] = rv
+        #normalize
+        '''
+        for index, one in enumerate(landmark):
+            rv = ((one[0]-bbox[0])/(bbox[2]-bbox[0]), (one[1]-bbox[1])/(bbox[3]-bbox[1]))
+            landmark[index] = rv
+        '''
+        yield (img_path, BBox(bbox), landmark)
+
+class BBox(object):
+    """
+        Bounding Box of face
+    """
+
+    def __init__(self, bbox):
+        self.left = bbox[0]
+        self.top = bbox[1]
+        self.right = bbox[2]
+        self.bottom = bbox[3]
+
+        self.x = bbox[0]
+        self.y = bbox[1]
+        self.w = bbox[2] - bbox[0]
+        self.h = bbox[3] - bbox[1]
+
+    def expand(self, scale=0.05):
+        bbox = [self.left, self.right, self.top, self.bottom]
+        bbox[0] -= int(self.w * scale)
+        bbox[1] += int(self.w * scale)
+        bbox[2] -= int(self.h * scale)
+        bbox[3] += int(self.h * scale)
+        return BBox(bbox)
+
+    # offset
+    def project(self, point):
+        x = (point[0] - self.x) / self.w
+        y = (point[1] - self.y) / self.h
+        return np.asarray([x, y])
+
+    # absolute position(image (left,top))
+    def reproject(self, point):
+        x = self.x + self.w * point[0]
+        y = self.y + self.h * point[1]
+        return np.asarray([x, y])
+
+    # landmark: 5*2
+    def reprojectLandmark(self, landmark):
+        p = np.zeros((len(landmark), 2))
+        for i in range(len(landmark)):
+            p[i] = self.reproject(landmark[i])
+        return p
+
+    # change to offset according to bbox
+    def projectLandmark(self, landmark):
+        p = np.zeros((len(landmark), 2))
+        for i in range(len(landmark)):
+            p[i] = self.project(landmark[i])
+        return p
+
+    # f_bbox = bbox.subBBox(-0.05, 1.05, -0.05, 1.05)
+    # self.w bounding-box width
+    # self.h bounding-box height
+    def subBBox(self, leftR, rightR, topR, bottomR):
+        leftDelta = self.w * leftR
+        rightDelta = self.w * rightR
+        topDelta = self.h * topR
+        bottomDelta = self.h * bottomR
+        left = self.left + leftDelta
+        right = self.left + rightDelta
+        top = self.top + topDelta
+        bottom = self.top + bottomDelta
+        return BBox([left, right, top, bottom])
+
