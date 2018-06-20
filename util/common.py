@@ -1,6 +1,49 @@
 import numpy as np
 import os
 
+
+def py_nms(dets, thresh, mode="Union"):
+    """
+    greedily select boxes with high confidence
+    keep boxes overlap <= thresh
+    rule out overlap > thresh
+    :param dets: [[x1, y1, x2, y2 score]]
+    :param thresh: retain overlap <= thresh
+    :return: indexes to keep
+    """
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        if mode == "Union":
+            ovr = inter / (areas[i] + areas[order[1:]] - inter)
+        elif mode == "Minimum":
+            ovr = inter / np.minimum(areas[i], areas[order[1:]])
+        #keep
+        inds = np.where(ovr <= thresh)[0]
+        order = order[inds + 1]
+
+    return keep
+
+
+
 """
 #　计算交并比
 param box: 目标框　　左顶点坐标　　右下角坐标
@@ -32,6 +75,17 @@ def IOU(bbox,bboxs_truth):
     iou = intersection_area *1.0/(bbox_area + boxs_truth_area - intersection_area)
     return iou
 
+def convert_to_square(bbox):
+    square_bbox = bbox.copy()
+    w = bbox[:,2] - bbox[:,0] + 1
+    h = bbox[:,3] - bbox[:,1] + 1
+
+    max_side = np.maximum(h,w)
+    square_bbox[:, 0] = bbox[:, 0] + w*0.5 - max_side*0.5
+    square_bbox[:, 1] = bbox[:, 1] + h*0.5 - max_side*0.5
+    square_bbox[:, 2] = square_bbox[:, 0] + max_side - 1
+    square_bbox[:, 3] = square_bbox[:, 1] + max_side - 1
+
 
 def getBboxLandmarkFromTxt(txt, with_landmark=True):
     """
@@ -45,6 +99,9 @@ def getBboxLandmarkFromTxt(txt, with_landmark=True):
         line = line.strip()
         components = line.split(' ')
         img_path = os.path.join(dirname, components[0]) # file path
+        print(img_path)
+        img_path = img_path.replace('\\', '/')
+        print(img_path)
         # bounding box, (x1, y1, x2, y2)
         bbox = (components[1], components[3], components[2], components[4])
         bbox = [float(_) for _ in bbox]

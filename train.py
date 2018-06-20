@@ -6,7 +6,7 @@ import numpy as np
 
 from model import mtcnnmodel
 from util import tfrecord_read
-rootPath = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+rootPath = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "./"))
 sys.path.insert(0, rootPath)
 
 
@@ -169,11 +169,11 @@ def _get_training(baseLr, loss, data_num):
 
     #LR_EPOCH [8,14]
     #boundaried [num_batch,num_batch]
-    boundaries = [int(epoch * data_num / FLAGS.BATCH_SIZE) for epoch in LR_EPOCH]
+    boundaries = [int(epoch * data_num / FLAGS.batch_size) for epoch in LR_EPOCH]
     #lr_values[0.01,0.001,0.0001,0.00001]
     lr_values = [baseLr * (lr_factor ** x) for x in range(0, len(LR_EPOCH) + 1)]  #学习率衰减
     #control learning rate
-    lr_op = tf.train.piecewise_constant(global_step, boundaries, lr_values)
+    lr_op = tf.train.piecewise_constant(tf.train.get_global_step(), boundaries, lr_values)
     optimizer = tf.train.MomentumOptimizer(lr_op, 0.9)
     train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
     tf.summary.scalar('learning_rate', lr_op)
@@ -182,9 +182,11 @@ def _get_training(baseLr, loss, data_num):
 
 
 def main(argv=None):
-    dataPath = os.path.join(rootPath, "tmp/data/%s" % ('pnet'))
-    gpus = 1
+
     net = 'pnet'
+
+    dataPath = os.path.join(rootPath, "tmp/data/%s" % ('pnet'))
+    gpus = '1'
     # set GPU
     if gpus:
         os.environ["CUDA_VISIBLE_DEVICES"] = gpus
@@ -192,23 +194,23 @@ def main(argv=None):
     if net == 'pnet': # PNet use this method to get data
         dataset_dir = os.path.join(dataPath, 'all.tfrecord')
         total_num = sum(1 for _ in tf.python_io.tf_record_iterator(dataset_dir))
-
-    # elif net in ['rnet', 'onet']: # RNet and ONet use 4 tfrecords to get data
-    #     pos_dir = os.path.join(dataPath, 'pos.tfrecord')
-    #     part_dir = os.path.join(dataPath, 'part.tfrecord')
-    #     neg_dir = os.path.join(dataPath, 'neg.tfrecord')
-    #     landmark_dir = os.path.join(dataPath, 'landmark.tfrecord')
-    #     dataset_dirs = [pos_dir, part_dir, neg_dir, landmark_dir]
-    #     pos_ratio, part_ratio, landmark_ratio, neg_ratio = 1.0/6, 1.0/6, 1.0/6, 3.0/6
-    #     pos_batch_size = int(np.ceil(config.BATCH_SIZE*pos_ratio))
-    #     part_batch_size = int(np.ceil(config.BATCH_SIZE*part_ratio))
-    #     neg_batch_size = int(np.ceil(config.BATCH_SIZE*neg_ratio))
-    #     landmark_batch_size = int(np.ceil(config.BATCH_SIZE*landmark_ratio))
-    #     batch_sizes = [pos_batch_size, part_batch_size, neg_batch_size, landmark_batch_size]
-    #     image_batch, label_batch, bbox_batch, landmark_batch = read_multi_tfrecords(dataset_dirs, batch_sizes, net)
-    #     total_num = 0
-    #     for d in dataset_dirs:
-    #         total_num += sum(1 for _ in tf.python_io.tf_record_iterator(d))
+        print(total_num)
+    elif net in ['rnet', 'onet']: # RNet and ONet use 4 tfrecords to get data
+        pos_dir = os.path.join(dataPath, 'pos.tfrecord')
+        part_dir = os.path.join(dataPath, 'part.tfrecord')
+        neg_dir = os.path.join(dataPath, 'neg.tfrecord')
+        landmark_dir = os.path.join(dataPath, 'landmark.tfrecord')
+        dataset_dirs = [pos_dir, part_dir, neg_dir, landmark_dir]
+        pos_ratio, part_ratio, landmark_ratio, neg_ratio = 1.0/6, 1.0/6, 1.0/6, 3.0/6
+        pos_batch_size = int(np.ceil(config.BATCH_SIZE*pos_ratio))
+        part_batch_size = int(np.ceil(config.BATCH_SIZE*part_ratio))
+        neg_batch_size = int(np.ceil(config.BATCH_SIZE*neg_ratio))
+        landmark_batch_size = int(np.ceil(config.BATCH_SIZE*landmark_ratio))
+        batch_sizes = [pos_batch_size, part_batch_size, neg_batch_size, landmark_batch_size]
+        image_batch, label_batch, bbox_batch, landmark_batch = read_multi_tfrecords(dataset_dirs, batch_sizes, net)
+        total_num = 0
+        for d in dataset_dirs:
+            total_num += sum(1 for _ in tf.python_io.tf_record_iterator(d))
     #ratio
     if net == 'pnet':
         image_size = 12
@@ -224,15 +226,15 @@ def main(argv=None):
 
 
     with tf.Graph().as_default():
-        global_step = tf.contrib.framework.get_or_create_global_step()
+        global_step = tf.train.get_or_create_global_step()
 
         image_batch, label_batch, bbox_batch, landmark_batch = tfrecord_read.read_single_tfrecord(dataset_dir,
                                                                                                   FLAGS.batch_size, net)
         input_image = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 12, 12, 3],
                                      name='input_image')
         label = tf.placeholder(tf.float32, shape=[FLAGS.batch_size], name='label')
-        bboxs_truth = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 4], name='bbox_target')
-        landmarks_truth = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 10], name='landmark_target')
+        bboxs_truth = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 4], name='bboxs_truth')
+        landmarks_truth = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 10], name='landmarks_truth')
 
         with tf.device(FLAGS.train_device):
             cls_loss, bbox_loss, landmark_loss, l2_loss = mtcnnmodel.mtcnn_pnet(input_image, label,bboxs_truth,landmarks_truth, mode=learn.ModeKeys.TRAIN)

@@ -41,7 +41,7 @@ def conv_layer(input,filternum,kernelsize,strides,pad,scope,activation,training)
                         kernel_size=kernelsize,
                         strides = strides,
                         padding=pad,
-                        activation=activation,
+                        activation=activation_fn,
                         kernel_initializer=kernel_initializer,
                         bias_initializer=bias_initializer,
                         kernel_regularizer=tf.contrib.layers.l2_regularizer(0.0005),

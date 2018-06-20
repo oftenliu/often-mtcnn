@@ -3,11 +3,9 @@ import os,sys
 import tensorflow as tf
 import numpy as np
 import cv2
-from util import tfrecord_util
-
-
 rootPath = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 sys.path.insert(0, rootPath)
+from util import tfrecord_util
 
 def __iter_all_data(net, iterType):
     saveFolder = os.path.join(rootPath, "tmp/data/%s/"%(net))
@@ -153,8 +151,7 @@ def gen_tfrecord(filename,net,iterType,shuffling):
     with tf.python_io.TFRecordWriter(filename) as tfrecord_writer:
         for i, image_example in enumerate(dataset):
             if i % 100 == 0:
-                sys.stdout.write('\rConverting[%s]: %d/%d' % (net, i + 1, len(dataset)))
-                sys.stdout.flush()
+                print('\rConverting[%s]: %d/%d' % (net, i + 1, len(dataset)))
             filename = image_example['filename']
             __add_to_tfrecord(filename, image_example, tfrecord_writer)
     tfrecord_writer.close()
@@ -196,7 +193,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    stage = args.stage
+    stage = 'pnet'
     if stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     # set GPU

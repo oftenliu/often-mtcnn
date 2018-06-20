@@ -33,6 +33,7 @@ def gen_landmark_data(srcTxt, net, augment=False):
     for (imgPath, bbox, landmarkGt) in getBboxLandmarkFromTxt(srcTxt):
         F_imgs = []
         F_landmarks = []        
+        print(imgPath)
         img = cv2.imread(imgPath)
         assert(img is not None)
         img_h, img_w, img_c = img.shape

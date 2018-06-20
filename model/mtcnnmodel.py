@@ -5,12 +5,12 @@ from model import netlayer
 import tensorflow as tf
 from tensorflow.contrib import learn
 from tensorflow.contrib import slim
-pnet_params = [[10, 3, 1, 'same', 'conv1', 'relu'],  # pool
-                [16, 3, 1, 'same', 'conv2', 'relu'],
-                [32, 3, 1, 'same', 'conv3', 'relu'],
-                [2, 1, 1, 'same', 'class_pred', 'softmax'],
-                [4, 1, 1, 'same', 'bbox_pred', 'none'],
-                [10, 1, 1, 'same', 'landmark_pred', 'none']
+pnet_params = [[10, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+                [16, 3, 1, 'valid', 'conv2', 'relu'],
+                [32, 3, 1, 'valid', 'conv3', 'relu'],
+                [2, 1, 1, 'valid', 'class_pred', 'softmax'],
+                [4, 1, 1, 'valid', 'bbox_pred', 'none'],
+                [10, 1, 1, 'valid', 'landmark_pred', 'none']
                 ]
 
 
@@ -82,7 +82,7 @@ def bbox_ohem(bbox_pred,bbox_truth,labels):
 
     valid_indexs = tf.where(tf.equal(tf.abs(labels),1),ones,zeros)  #使用pos 和　part计算目标框回归损失
 
-    bbox_square_loss = tf.square(bbox_pred,bbox_truth) #每个sample的box有四个值　二维
+    bbox_square_loss = tf.square(bbox_pred-bbox_truth) #每个sample的box有四个值　二维
     bbox_square_loss = tf.reduce_sum(bbox_square_loss,axis=1)  #将每个sample的目标框左上角坐标值　宽　高的loss累加起来　
     bbox_square_loss = bbox_square_loss * valid_indexs      #使用pos 和　part计算目标框回归损失
 
@@ -132,16 +132,15 @@ param mode: learn.ModeKeys.TRAIN　　
 
 output:　卷积层输出　[batch, out_height, out_width, filternum]
 """
-def mtcnn_pnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, mode=learn.ModeKeys.TRAIN):
+def mtcnn_pnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, training=False):
     """Build convolutional network layers attached to the given input tensor"""
 
-    training = (mode == learn.ModeKeys.TRAIN)
 
     with tf.variable_scope("mtcnn_pnet"):
         conv1 = mtcnnconv(inputs, pnet_params[0], training)
         pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
         conv2 = mtcnnconv(pool1, pnet_params[1], training)
-        conv3 = netlayer.conv_layer(conv2, pnet_params[2], training)
+        conv3 = mtcnnconv(conv2, pnet_params[2], training)
         class_pred = mtcnnconv(conv3, pnet_params[3], training)
 
         bbox_pred = mtcnnconv(conv3, pnet_params[4], training)  # 7,14
@@ -190,9 +189,8 @@ param mode: learn.ModeKeys.TRAIN　　
 
 output:　卷积层输出　[batch, out_height, out_width, filternum]
 """
-def mtcnn_rnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, mode=learn.ModeKeys.TRAIN):
+def mtcnn_rnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, training=False):
 
-    training = (mode == learn.ModeKeys.TRAIN)
 
     with tf.variable_scope("mtcnn_pnet"):
         conv1 = mtcnnconv(inputs, rnet_params[0], training)
@@ -218,8 +216,8 @@ def mtcnn_rnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, mode=l
             cls_loss = class_ohem(cls_prob,labels)
             bbox_loss = bbox_ohem(bbox_pred,bboxs_truth,labels)
             landmark_loss = landmark_ohem(landmark_pred,landmarks_truth,labels)
-            L2_loss = tf.add_n(slim.losses.get_regularization_losses())
-            return cls_loss,bbox_loss,landmark_loss,L2_loss
+            l2_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+            return cls_loss,bbox_loss,landmark_loss,l2_loss
         else:
             return cls_prob,bbox_pred,landmark_pred
 
@@ -243,9 +241,9 @@ param mode: learn.ModeKeys.TRAIN　　
 
 output:　卷积层输出　[batch, out_height, out_width, filternum]
 """
-def mtcnn_onet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, mode=learn.ModeKeys.TRAIN):
+def mtcnn_onet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, training=False):
 
-    training = (mode == learn.ModeKeys.TRAIN)
+
 
     with tf.variable_scope("mtcnn_pnet"):
         conv1 = mtcnnconv(inputs, onet_params[0], training)
@@ -275,7 +273,7 @@ def mtcnn_onet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, mode=l
             cls_loss = class_ohem(cls_prob,labels)
             bbox_loss = bbox_ohem(bbox_pred,bboxs_truth,labels)
             landmark_loss = landmark_ohem(landmark_pred,landmarks_truth,labels)
-            L2_loss = tf.add_n(slim.losses.get_regularization_losses())
-            return cls_loss,bbox_loss,landmark_loss,L2_loss
+            l2_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+            return cls_loss,bbox_loss,landmark_loss,l2_loss
         else:
             return cls_prob,bbox_pred,landmark_pred
