@@ -67,6 +67,7 @@ def __save_data(stage, data, save_path):
     total_idx = 0
     for im_idx, dets, gts in zip(im_idx_list, det_boxes, gt_boxes_list):
         gts = np.array(gts, dtype=np.float32).reshape(-1, 4)
+        print(dets.shape[0])
         if dets.shape[0] == 0:
             continue
         img = cv2.imread(im_idx)
@@ -161,6 +162,7 @@ def test_net(batch_size, stage, thresh, min_face_size, stride):
     with open(save_file, 'wb') as f:
         pickle.dump(detections, f, 1)
     print("\nDone! Start to do OHEM...")
+
     __save_data(stage, data, save_path)
 
 def parse_args():

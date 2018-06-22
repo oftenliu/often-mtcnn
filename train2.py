@@ -72,22 +72,22 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
         dataset_dir = os.path.join(dataPath, 'all.tfrecord')
         total_num = sum(1 for _ in tf.python_io.tf_record_iterator(dataset_dir))
         image_batch, label_batch, bbox_batch, landmark_batch = read_single_tfrecord(dataset_dir, config.BATCH_SIZE, net)
-    # elif net in ['rnet', 'onet']:  # RNet and ONet use 4 tfrecords to get data
-    #     pos_dir = os.path.join(dataPath, 'pos.tfrecord')
-    #     part_dir = os.path.join(dataPath, 'part.tfrecord')
-    #     neg_dir = os.path.join(dataPath, 'neg.tfrecord')
-    #     landmark_dir = os.path.join(dataPath, 'landmark.tfrecord')
-    #     dataset_dirs = [pos_dir, part_dir, neg_dir, landmark_dir]
-    #     pos_ratio, part_ratio, landmark_ratio, neg_ratio = 1.0 / 6, 1.0 / 6, 1.0 / 6, 3.0 / 6
-    #     pos_batch_size = int(np.ceil(config.BATCH_SIZE * pos_ratio))
-    #     part_batch_size = int(np.ceil(config.BATCH_SIZE * part_ratio))
-    #     neg_batch_size = int(np.ceil(config.BATCH_SIZE * neg_ratio))
-    #     landmark_batch_size = int(np.ceil(config.BATCH_SIZE * landmark_ratio))
-    #     batch_sizes = [pos_batch_size, part_batch_size, neg_batch_size, landmark_batch_size]
-    #     image_batch, label_batch, bbox_batch, landmark_batch = read_multi_tfrecords(dataset_dirs, batch_sizes, net)
-    #     total_num = 0
-    #     for d in dataset_dirs:
-    #         total_num += sum(1 for _ in tf.python_io.tf_record_iterator(d))
+    elif net in ['rnet', 'onet']:  # RNet and ONet use 4 tfrecords to get data
+        pos_dir = os.path.join(dataPath, 'pos.tfrecord')
+        part_dir = os.path.join(dataPath, 'part.tfrecord')
+        neg_dir = os.path.join(dataPath, 'neg.tfrecord')
+        landmark_dir = os.path.join(dataPath, 'landmark.tfrecord')
+        dataset_dirs = [pos_dir, part_dir, neg_dir, landmark_dir]
+        pos_ratio, part_ratio, landmark_ratio, neg_ratio = 1.0 / 6, 1.0 / 6, 1.0 / 6, 3.0 / 6
+        pos_batch_size = int(np.ceil(config.BATCH_SIZE * pos_ratio))
+        part_batch_size = int(np.ceil(config.BATCH_SIZE * part_ratio))
+        neg_batch_size = int(np.ceil(config.BATCH_SIZE * neg_ratio))
+        landmark_batch_size = int(np.ceil(config.BATCH_SIZE * landmark_ratio))
+        batch_sizes = [pos_batch_size, part_batch_size, neg_batch_size, landmark_batch_size]
+        image_batch, label_batch, bbox_batch, landmark_batch = read_multi_tfrecords(dataset_dirs, batch_sizes, net)
+        total_num = 0
+        for d in dataset_dirs:
+            total_num += sum(1 for _ in tf.python_io.tf_record_iterator(d))
     # ratio
     if net == 'pnet':
         image_size = 12
@@ -106,11 +106,11 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
     bbox_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 4], name='bbox_target')
     landmark_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 10], name='landmark_target')
     # class,regression
-    cls_loss_op, bbox_loss_op, landmark_loss_op, L2_loss_op = mtcnnmodel.mtcnn_pnet(input_image, label, bbox_target,
+    cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op,accuracy_op = mtcnnmodel.mtcnn_pnet(input_image, label, bbox_target,
                                                                                       landmark_target, training=True)
     # train,update learning rate(3 loss)
     train_op, lr_op = train_model(baseLr,
-                                  ratio_cls_loss * cls_loss_op + ratio_bbox_loss * bbox_loss_op + ratio_landmark_loss * landmark_loss_op + L2_loss_op,
+                                  ratio_cls_loss * cls_loss_op + ratio_bbox_loss * bbox_loss_op + ratio_landmark_loss * landmark_loss_op + l2_loss_op,
                                   total_num)
     # init
     init = tf.global_variables_initializer()
@@ -123,7 +123,7 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
     tf.summary.scalar("cls_loss", cls_loss_op)  # cls_loss
     tf.summary.scalar("bbox_loss", bbox_loss_op)  # bbox_loss
     tf.summary.scalar("landmark_loss", landmark_loss_op)  # landmark_loss
-   # tf.summary.scalar("cls_accuracy", accuracy_op)  # cls_acc
+    tf.summary.scalar("cls_accuracy", accuracy_op)  # cls_acc
     summary_op = tf.summary.merge_all()
     logs_dir = os.path.join(rootPath, "tmp", "logs", net)
     if os.path.exists(logs_dir) == False:
@@ -165,13 +165,13 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
 
             if (step + 1) % display == 0:
                 # acc = accuracy(cls_pred, labels_batch)
-                cls_loss, bbox_loss, landmark_loss, L2_loss, lr = sess.run(
-                    [cls_loss_op, bbox_loss_op, landmark_loss_op, L2_loss_op, lr_op],
+                cls_loss, bbox_loss, landmark_loss, l2_loss, lr,acc = sess.run(
+                    [cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op, lr_op,accuracy_op],
                     feed_dict={input_image: image_batch_array, label: label_batch_array, bbox_target: bbox_batch_array,
                                landmark_target: landmark_batch_array})
                 print(
-                    "%s [%s] Step: %d cls loss: %4f, bbox loss: %4f, landmark loss: %4f,L2 loss: %4f,lr:%f " % (
-                        datetime.now(), net, step + 1, cls_loss, bbox_loss, landmark_loss, L2_loss, lr))
+                    "%s [%s] Step: %d, accuracy: %3f, cls loss: %4f, bbox loss: %4f, landmark loss: %4f,L2 loss: %4f,lr:%f " % (
+                        datetime.now(), net, step + 1,acc, cls_loss, bbox_loss, landmark_loss, l2_loss, lr))
             # save every two epochs
             if i * config.BATCH_SIZE > total_num * 2:
                 epoch = epoch + 1

@@ -131,13 +131,13 @@ def _convert_to_example_simple(image_example, image_buffer):
 
 
 
-def __add_to_tfrecord(filename, image_example, tfrecord_writer):
+def make_example(filename, image_example):
     """
     Loads data from image and annotations files and add them to a TFRecord.
     """
     image_data, height, width = _process_image_withoutcoder(filename)
     example = _convert_to_example_simple(image_example, image_data)
-    tfrecord_writer.write(example.SerializeToString())
+    return example
 
 def gen_tfrecord(filename,net,iterType,shuffling):
     if tf.gfile.Exists(filename):
@@ -148,12 +148,16 @@ def gen_tfrecord(filename,net,iterType,shuffling):
         np.random.shuffle(dataset)
     # Process dataset files.
     # write the data to tfrecord
-    with tf.python_io.TFRecordWriter(filename) as tfrecord_writer:
-        for i, image_example in enumerate(dataset):
-            if i % 100 == 0:
-                print('\rConverting[%s]: %d/%d' % (net, i + 1, len(dataset)))
-            filename = image_example['filename']
-            __add_to_tfrecord(filename, image_example, tfrecord_writer)
+    tfrecord_writer = tf.python_io.TFRecordWriter(filename)
+
+    for i, image_example in enumerate(dataset):
+        #if i % 100 == 0:
+            
+        filename = image_example['filename']
+        example = make_example(filename, image_example)
+        tfrecord_writer.write(example.SerializeToString())
+        print('\rConverting[%s]: %d/%d' % (net, i + 1, len(dataset)))
+        
     tfrecord_writer.close()
     print('\n')
 
@@ -193,7 +197,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    stage = 'pnet'
+    stage = 'rnet'
     if stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     # set GPU

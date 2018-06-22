@@ -237,7 +237,7 @@ def main(argv=None):
         landmarks_truth = tf.placeholder(tf.float32, shape=[FLAGS.batch_size, 10], name='landmarks_truth')
 
         with tf.device(FLAGS.train_device):
-            cls_loss, bbox_loss, landmark_loss, l2_loss = mtcnnmodel.mtcnn_pnet(input_image, label,bboxs_truth,landmarks_truth, mode=learn.ModeKeys.TRAIN)
+            cls_loss, bbox_loss, landmark_loss, l2_loss,accuracy_op = mtcnnmodel.mtcnn_pnet(input_image, label,bboxs_truth,landmarks_truth, mode=learn.ModeKeys.TRAIN)
 
             train_op,lr_op = _get_training(0.1, ratio_cls_loss*cls_loss + ratio_bbox_loss*bbox_loss + ratio_landmark_loss*landmark_loss + l2_loss, total_num)
 
@@ -246,7 +246,7 @@ def main(argv=None):
         tf.summary.scalar("cls_loss", cls_loss)  # cls_loss
         tf.summary.scalar("bbox_loss", bbox_loss)  # bbox_loss
         tf.summary.scalar("landmark_loss", landmark_loss)  # landmark_loss
-
+        tf.summary.scalar("cls_accuracy",accuracy_op)#cls_acc
 
 
         summary_op = tf.summary.merge_all()

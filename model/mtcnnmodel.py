@@ -122,6 +122,19 @@ def landmark_ohem(landmark_pred,landmark_truth,labels):
     return tf.reduce_mean(hard_loss)
 
 
+
+def cal_accuracy(cls_prob,label):
+    pred = tf.argmax(cls_prob,axis=1)
+    label_int = tf.cast(label,tf.int64)
+    cond = tf.where(tf.greater_equal(label_int,0))
+    picked = tf.squeeze(cond)
+    label_picked = tf.gather(label_int,picked)
+    pred_picked = tf.gather(pred,picked)
+    accuracy_op = tf.reduce_mean(tf.cast(tf.equal(label_picked,pred_picked),tf.float32))
+    return accuracy_op
+
+
+
 """
 #mtcnn p-net网络
 param input: 输入层数据　[batch, in_height, in_width, in_channels]
@@ -158,10 +171,10 @@ def mtcnn_pnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, traini
             landmark_loss = landmark_ohem(landmark_pred, landmarks_truth, labels)
 
             l2_loss = tf.add_n( tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-
+            accuracy = cal_accuracy(cls_prob, labels)
             #l2_loss = tf.losses.get_regularization_loss()
 
-            return cls_loss, bbox_loss, landmark_loss, l2_loss
+            return cls_loss, bbox_loss, landmark_loss, l2_loss,accuracy
         else: # testing
             #when test, batch_size = 1
             cls_pro_test = tf.squeeze(class_pred, axis=0)
