@@ -8,7 +8,7 @@ import argparse
 from tensorflow.contrib import learn
 rootPath = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "./"))
 sys.path.insert(0, rootPath)
-from util.tfrecord_read import read_single_tfrecord
+from util.tfrecord_read import read_single_tfrecord, read_multi_tfrecords
 from mtcnn_config import config
 from model import mtcnnmodel
 import cv2
@@ -61,7 +61,7 @@ def random_flip_images(image_batch, label_batch, landmark_batch):
     return image_batch, landmark_batch
 
 
-def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
+def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.001, gpus=""):
     net = modelPrefix.split('/')[-1]
     print("Now start to train...stage: %s" % (net))
     # set GPU
@@ -106,7 +106,7 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.01, gpus=""):
     bbox_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 4], name='bbox_target')
     landmark_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 10], name='landmark_target')
     # class,regression
-    cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op,accuracy_op = mtcnnmodel.mtcnn_pnet(input_image, label, bbox_target,
+    cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op,accuracy_op = mtcnnmodel.mtcnn_rnet(input_image, label, bbox_target,
                                                                                       landmark_target, training=True)
     # train,update learning rate(3 loss)
     train_op, lr_op = train_model(baseLr,
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     args = parse_args()
     print
     "The training argument info is: ", args
-    args.stage = 'pnet'
+    args.stage = 'rnet'
     if args.stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     dataPath = os.path.join(rootPath, "tmp/data/%s" % (args.stage))
