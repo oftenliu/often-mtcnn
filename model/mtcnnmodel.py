@@ -239,10 +239,10 @@ def mtcnn_rnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, traini
 
 
 
-onet_params = [[32, 3, 1, 'same', 'conv1', 'relu'],  # pool
-                [64, 3, 1, 'same', 'conv2', 'relu'],
-                [64, 3, 1, 'same', 'conv3', 'relu'],
-                [128, 2, 1, 'same', 'conv4', 'relu'],
+onet_params = [[32, 3, 1, 'valid', 'conv1', 'relu'],  # pool
+                [64, 3, 1, 'valid', 'conv2', 'relu'],
+                [64, 3, 1, 'valid', 'conv3', 'relu'],
+                [128, 2, 1, 'valid', 'conv4', 'relu'],
                 ]
 
 """
@@ -259,35 +259,37 @@ def mtcnn_onet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, traini
 
 
 
-    with tf.variable_scope("mtcnn_pnet"):
+    with tf.variable_scope("mtcnn_onet"):
         conv1 = mtcnnconv(inputs, onet_params[0], training)
 
         pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
 
-        conv2 = mtcnnconv(pool1, rnet_params[1], training)
+        conv2 = mtcnnconv(pool1, onet_params[1], training)
 
         pool2 = netlayer.maxpool_layer(conv2, [2, 2], 2, 'same', 'pool2')
 
-        conv3 = netlayer.conv_layer(pool2, rnet_params[2], training)
+        conv3 = mtcnnconv(pool2, onet_params[2], training)
 
         pool3 = netlayer.maxpool_layer(conv3, [2, 2], 2, 'same', 'pool3')
 
-        conv4 = netlayer.conv_layer(pool3, rnet_params[2], training)
+        conv4 = mtcnnconv(pool3, onet_params[3], training)
 
-        fc_flatten = slim.flatten(conv4)
-        fc1 = netlayer.dense_layer(fc_flatten, num_outputs=256, scope="fc1", activation='relu', training=training)
+        fc_flatten = netlayer.flatten_layer(conv4,scope='flatten')
+
+        fc1 = netlayer.dense_layer(fc_flatten, outputnum=256, scope="fc1", activation='relu', training=training)
         #batch*2
-        cls_prob = netlayer.dense_layer(fc1, num_outputs=2, scope="cls_fc", activation='softmax', training=training)
+        cls_prob = netlayer.dense_layer(fc1, outputnum=2, scope="cls_fc", activation='softmax', training=training)
         #batch*4
-        bbox_pred = netlayer.dense_layer(fc1, num_outputs=4, scope="bbox_fc", activation='none', training=training)
+        bbox_pred = netlayer.dense_layer(fc1, outputnum=4, scope="bbox_fc", activation='none', training=training)
         #batch*10
-        landmark_pred = netlayer.dense_layer(fc1, num_outputs=10, scope="landmark_fc", activation='none', training=training)
+        landmark_pred = netlayer.dense_layer(fc1, outputnum=10, scope="landmark_fc", activation='none', training=training)
         #train
         if training:
             cls_loss = class_ohem(cls_prob,labels)
             bbox_loss = bbox_ohem(bbox_pred,bboxs_truth,labels)
             landmark_loss = landmark_ohem(landmark_pred,landmarks_truth,labels)
+            accuracy = cal_accuracy(cls_prob,labels)
             l2_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-            return cls_loss,bbox_loss,landmark_loss,l2_loss
+            return cls_loss,bbox_loss,landmark_loss,l2_loss,accuracy
         else:
             return cls_prob,bbox_pred,landmark_pred

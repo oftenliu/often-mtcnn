@@ -169,7 +169,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Create hard bbox sample...',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--stage', dest='stage', help='working stage, can be rnet, onet',
-                        default='rnet', type=str)
+                        default='onet', type=str)
     parser.add_argument('--gpus', dest='gpus', help='specify gpu to run. eg: --gpus=0,1',
                         default='0', type=str)
     args = parser.parse_args()

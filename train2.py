@@ -61,7 +61,7 @@ def random_flip_images(image_batch, label_batch, landmark_batch):
     return image_batch, landmark_batch
 
 
-def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.001, gpus=""):
+def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.00001, gpus=""):
     net = modelPrefix.split('/')[-1]
     print("Now start to train...stage: %s" % (net))
     # set GPU
@@ -106,7 +106,7 @@ def train(modelPrefix, endEpoch, dataPath, display=200, baseLr=0.001, gpus=""):
     bbox_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 4], name='bbox_target')
     landmark_target = tf.placeholder(tf.float32, shape=[config.BATCH_SIZE, 10], name='landmark_target')
     # class,regression
-    cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op,accuracy_op = mtcnnmodel.mtcnn_rnet(input_image, label, bbox_target,
+    cls_loss_op, bbox_loss_op, landmark_loss_op, l2_loss_op,accuracy_op = mtcnnmodel.mtcnn_onet(input_image, label, bbox_target,
                                                                                       landmark_target, training=True)
     # train,update learning rate(3 loss)
     train_op, lr_op = train_model(baseLr,
@@ -199,7 +199,7 @@ def parse_args():
     parser.add_argument('--display', dest='display', help='how much step to display',
                         default=100, type=int)
     parser.add_argument('--lr', dest='lr', help='base learning rate',
-                        default=0.01, type=float)
+                        default=0.001, type=float)
     args = parser.parse_args()
     return args
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     args = parse_args()
     print
     "The training argument info is: ", args
-    args.stage = 'rnet'
+    args.stage = 'onet'
     if args.stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     dataPath = os.path.join(rootPath, "tmp/data/%s" % (args.stage))

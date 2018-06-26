@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/ulsee/lqc/often-mtcnn/tmp/model/onet/onet-30"
+all_model_checkpoint_paths: "/home/ulsee/lqc/often-mtcnn/tmp/model/onet/onet-30"

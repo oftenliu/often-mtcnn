@@ -157,7 +157,7 @@ def gen_tfrecord(filename,net,iterType,shuffling):
         example = make_example(filename, image_example)
         tfrecord_writer.write(example.SerializeToString())
         print('\rConverting[%s]: %d/%d' % (net, i + 1, len(dataset)))
-        
+
     tfrecord_writer.close()
     print('\n')
 
@@ -197,7 +197,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    stage = 'rnet'
+    stage = 'onet'
     if stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     # set GPU
