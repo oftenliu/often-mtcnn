@@ -169,7 +169,8 @@ def start(net,shuffling=False):
         tfFileName = os.path.join(saveFolder, "all.tfrecord")
         gen_tfrecord(tfFileName, net, 'all', shuffling)
     elif net in ['rnet', 'onet']:
-        for n in ['pos', 'neg', 'part', 'landmark']:
+        #for n in ['pos', 'neg', 'part', 'landmark']:
+        for n in ['landmark']:
             tfFileName = os.path.join(saveFolder, "%s.tfrecord"%(n))
             gen_tfrecord(tfFileName, net, n, shuffling)
     # Finally, write the labels file:
@@ -197,7 +198,7 @@ def parse_args():
 if __name__ == "__main__":
 
     args = parse_args()
-    stage = 'onet'
+    stage = 'rnet'
     if stage not in ['pnet', 'rnet', 'onet']:
         raise Exception("Please specify stage by --stage=pnet or rnet or onet")
     # set GPU

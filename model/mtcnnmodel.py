@@ -59,7 +59,9 @@ def class_ohem(class_pred,labels):
 
     #难例在线挖掘
     num_valids = tf.reduce_sum(valid_indexs)
-
+    sess = tf.Session()
+    print(sess.run(num_valids))
+    print("12343462535254352352364464")
     keep_num = tf.cast(num_valids*KEEP_RATE,tf.int32)  #使用损失值位于前７０％loss进行计算
 
     hard_loss, _ = tf.nn.top_k(pos_neg_loss, k=keep_num)  #难例损失
@@ -117,7 +119,6 @@ def landmark_ohem(landmark_pred,landmark_truth,labels):
 
     num_valid = tf.reduce_sum(valid_indexs)
     keep_num = tf.cast(num_valid*KEEP_RATE,dtype=tf.int32)
-
     hard_loss, _ = tf.nn.top_k(landmark_square_loss, k=keep_num)  #难例损失
     return tf.reduce_mean(hard_loss)
 
@@ -205,7 +206,7 @@ output:　卷积层输出　[batch, out_height, out_width, filternum]
 def mtcnn_rnet(inputs, labels=None,bboxs_truth=None,landmarks_truth=None, training=False):
 
 
-    with tf.variable_scope("mtcnn_pnet"):
+    with tf.variable_scope("mtcnn_rnet"):
         conv1 = mtcnnconv(inputs, rnet_params[0], training)
 
         pool1 = netlayer.maxpool_layer(conv1, [2, 2], 2, 'same', 'pool1')
